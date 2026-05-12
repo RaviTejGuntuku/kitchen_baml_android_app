@@ -43,6 +43,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import baml_client.types.CookingConstraints
 import baml_client.types.InventoryAnalysis
 import baml_client.types.RecipePlan
+import baml_client.types.RecipeSuggestion
+import baml_client.types.ShoppingPlanDeck
 import baml_client.types.ShoppingPlan
 import com.example.kitchenrecipeappbaml.ui.theme.Butter
 import com.example.kitchenrecipeappbaml.ui.theme.Charcoal
@@ -108,13 +110,15 @@ fun RecipePlannerScreen(
                 ),
             )
         }
-        if (state.inventory != null || state.constraints != null || state.recipePlan != null || state.shoppingPlan != null) {
+        if (state.inventory != null || state.constraints != null || state.recipePlan != null || state.shoppingPlanDeck != null) {
             item {
                 ResultSection(
                     inventory = state.inventory,
                     constraints = state.constraints,
                     recipePlan = state.recipePlan,
-                    shoppingPlan = state.shoppingPlan,
+                    selectedRecipeIndex = state.selectedRecipeIndex,
+                    onRecipeSelect = viewModel::selectRecipe,
+                    shoppingPlanDeck = state.shoppingPlanDeck,
                 )
             }
         }
@@ -132,7 +136,7 @@ private fun HeroSection() {
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("Fridge → Meal → Plan", style = MaterialTheme.typography.displaySmall)
+            Text("Recipe Planner", style = MaterialTheme.typography.displaySmall)
             Text(
                 "Scan a fridge, normalize restrictions, and let typed BAML agents turn messy multimodal input into a meal plan.",
                 style = MaterialTheme.typography.bodyLarge,
@@ -349,8 +353,19 @@ private fun ResultSection(
     inventory: InventoryAnalysis?,
     constraints: CookingConstraints?,
     recipePlan: RecipePlan?,
-    shoppingPlan: ShoppingPlan?,
+    selectedRecipeIndex: Int?,
+    onRecipeSelect: (Int) -> Unit,
+    shoppingPlanDeck: ShoppingPlanDeck?,
 ) {
+    val selectedRecipeName = recipePlan
+        ?.recipes
+        ?.getOrNull(selectedRecipeIndex ?: 0)
+        ?.name
+    val shoppingPlan = shoppingPlanDeck
+        ?.plans
+        ?.firstOrNull { option -> option.recipeName == selectedRecipeName }
+        ?.plan
+
     SectionCard(title = "4. Typed results") {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             inventory?.let {
@@ -385,34 +400,22 @@ private fun ResultSection(
             }
             recipePlan?.let {
                 ResultBlock("Recipes", it.title, it.whyItFits) {
-                    it.recipes.forEach { recipe ->
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = WarmCream),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                Text(recipe.name, style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    "${recipe.cookTimeMinutes} min • ${recipe.proteinEstimateGrams}g protein • ${recipe.difficulty}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = OliveGreen,
-                                )
-                                Text(recipe.description, style = MaterialTheme.typography.bodyMedium)
-                                Text(
-                                    "Missing: ${recipe.missingIngredients.joinToString().ifBlank { "Nothing essential" }}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Stone,
-                                )
-                            }
-                        }
+                    Text(
+                        "Tap a dish to see what you need to buy for that exact recipe.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Stone,
+                    )
+                    it.recipes.forEachIndexed { index, recipe ->
+                        RecipeOptionCard(
+                            recipe = recipe,
+                            selected = index == selectedRecipeIndex,
+                            onClick = { onRecipeSelect(index) },
+                        )
                     }
                 }
             }
             shoppingPlan?.let {
-                ResultBlock("Shopping", it.title, null) {
+                ResultBlock("Shopping", it.title, selectedRecipeName?.let { recipe -> "For $recipe" }) {
                     Text(
                         "Estimated total: $${"%.2f".format(it.estimatedTotalCostUsd)}",
                         style = MaterialTheme.typography.titleMedium,
@@ -455,6 +458,53 @@ private fun ResultSection(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun RecipeOptionCard(
+    recipe: RecipeSuggestion,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(containerColor = if (selected) SoftSage else WarmCream),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = if (selected) 2.dp else 0.dp,
+                color = if (selected) OliveGreen else Color.Transparent,
+                shape = RoundedCornerShape(16.dp),
+            ),
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(recipe.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                if (selected) {
+                    Text("Selected", style = MaterialTheme.typography.labelLarge, color = OliveGreen)
+                }
+            }
+            Text(
+                "${recipe.cookTimeMinutes} min • ${recipe.proteinEstimateGrams}g protein • ${recipe.difficulty}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = OliveGreen,
+            )
+            Text(recipe.description, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Missing: ${recipe.missingIngredients.joinToString().ifBlank { "Nothing essential" }}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Stone,
+            )
         }
     }
 }

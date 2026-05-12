@@ -28,6 +28,10 @@ typeMap.register("TYPES", "ShoppingItem", baml_client.types.ShoppingItem::class,
     typeMap.register("STREAM_TYPES", "ShoppingItem", baml_client.stream_types.ShoppingItem::class, baml_client.stream_types.ShoppingItem)
 typeMap.register("TYPES", "ShoppingPlan", baml_client.types.ShoppingPlan::class, baml_client.types.ShoppingPlan)
     typeMap.register("STREAM_TYPES", "ShoppingPlan", baml_client.stream_types.ShoppingPlan::class, baml_client.stream_types.ShoppingPlan)
+typeMap.register("TYPES", "ShoppingPlanDeck", baml_client.types.ShoppingPlanDeck::class, baml_client.types.ShoppingPlanDeck)
+    typeMap.register("STREAM_TYPES", "ShoppingPlanDeck", baml_client.stream_types.ShoppingPlanDeck::class, baml_client.stream_types.ShoppingPlanDeck)
+typeMap.register("TYPES", "ShoppingPlanOption", baml_client.types.ShoppingPlanOption::class, baml_client.types.ShoppingPlanOption)
+    typeMap.register("STREAM_TYPES", "ShoppingPlanOption", baml_client.stream_types.ShoppingPlanOption::class, baml_client.stream_types.ShoppingPlanOption)
 
 
 

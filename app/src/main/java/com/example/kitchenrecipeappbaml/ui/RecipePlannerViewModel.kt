@@ -10,6 +10,7 @@ import baml_client.BamlRuntime
 import baml_client.types.CookingConstraints
 import baml_client.types.InventoryAnalysis
 import baml_client.types.RecipePlan
+import baml_client.types.ShoppingPlanDeck
 import baml_client.types.ShoppingPlan
 import com.boundaryml.baml.BamlImage
 import com.boundaryml.baml.BamlException
@@ -39,7 +40,7 @@ data class AgentCardState(
 
 data class RecipePlannerUiState(
     val goalText: String = sampleFridges.first().starterGoal,
-    val pantryText: String = sampleFridges.first().pantryText,
+    val pantryText: String = "",
     val selectedSampleId: String = sampleFridges.first().id,
     val selectedRestrictions: Set<String> = sampleFridges.first().defaultRestrictions,
     val isRunning: Boolean = false,
@@ -47,7 +48,8 @@ data class RecipePlannerUiState(
     val inventory: InventoryAnalysis? = null,
     val constraints: CookingConstraints? = null,
     val recipePlan: RecipePlan? = null,
-    val shoppingPlan: ShoppingPlan? = null,
+    val selectedRecipeIndex: Int? = null,
+    val shoppingPlanDeck: ShoppingPlanDeck? = null,
     val ingredientAgent: AgentCardState = AgentCardState("Ingredient Agent"),
     val constraintAgent: AgentCardState = AgentCardState("Constraint Agent"),
     val recipeAgent: AgentCardState = AgentCardState("Recipe Agent"),
@@ -83,7 +85,7 @@ class RecipePlannerViewModel(
         _state.value = _state.value.copy(
             selectedSampleId = sampleId,
             goalText = sample.starterGoal,
-            pantryText = sample.pantryText,
+            pantryText = "",
             selectedRestrictions = sample.defaultRestrictions,
             errorMessage = null,
         )
@@ -98,10 +100,32 @@ class RecipePlannerViewModel(
 
     fun resetInputs() {
         val sample = _state.value.selectedSample
+        analysisJob?.cancel()
         _state.value = _state.value.copy(
             goalText = sample.starterGoal,
-            pantryText = sample.pantryText,
+            pantryText = "",
             selectedRestrictions = sample.defaultRestrictions,
+            errorMessage = null,
+            inventory = null,
+            constraints = null,
+            recipePlan = null,
+            selectedRecipeIndex = null,
+            shoppingPlanDeck = null,
+            ingredientAgent = AgentCardState("Ingredient Agent"),
+            constraintAgent = AgentCardState("Constraint Agent"),
+            recipeAgent = AgentCardState("Recipe Agent"),
+            shoppingAgent = AgentCardState("Shopping Agent"),
+            isRunning = false,
+        )
+    }
+
+    fun selectRecipe(index: Int) {
+        val snapshot = _state.value
+        val recipePlan = snapshot.recipePlan ?: return
+        if (index !in recipePlan.recipes.indices) return
+
+        _state.value = snapshot.copy(
+            selectedRecipeIndex = index,
             errorMessage = null,
         )
     }
@@ -115,12 +139,6 @@ class RecipePlannerViewModel(
             )
             return
         }
-        if (snapshot.pantryText.isBlank()) {
-            _state.value = snapshot.copy(
-                errorMessage = "Add pantry notes before running. Detailed failures are in Logcat."
-            )
-            return
-        }
 
         analysisJob?.cancel()
         _state.value = snapshot.copy(
@@ -129,7 +147,8 @@ class RecipePlannerViewModel(
             inventory = null,
             constraints = null,
             recipePlan = null,
-            shoppingPlan = null,
+            selectedRecipeIndex = null,
+            shoppingPlanDeck = null,
             ingredientAgent = AgentCardState("Ingredient Agent", AgentPhase.Running, "Scanning the selected fridge"),
             constraintAgent = AgentCardState("Constraint Agent", AgentPhase.Running, "Normalizing selected restrictions"),
             recipeAgent = AgentCardState("Recipe Agent", AgentPhase.Idle, "Waiting for inventory + constraints"),
@@ -194,7 +213,7 @@ class RecipePlannerViewModel(
 
                     _state.value = _state.value.copy(
                         recipeAgent = AgentCardState("Recipe Agent", AgentPhase.Running, "Drafting recipe candidates"),
-                        shoppingAgent = AgentCardState("Shopping Agent", AgentPhase.Idle, "Waiting for chosen recipe"),
+                        shoppingAgent = AgentCardState("Shopping Agent", AgentPhase.Idle, "Waiting for recipe candidates"),
                     )
 
                     val recipePlan = async(Dispatchers.IO) {
@@ -210,29 +229,33 @@ class RecipePlannerViewModel(
                             },
                             summary = { "${it.recipes.size} recipe ideas" },
                         ) { result ->
-                            _state.value = _state.value.copy(recipePlan = result)
+                            _state.value = _state.value.copy(
+                                recipePlan = result,
+                                selectedRecipeIndex = if (result.recipes.isNotEmpty()) 0 else null,
+                            )
                         }
                     }.await()
 
                     _state.value = _state.value.copy(
-                        shoppingAgent = AgentCardState("Shopping Agent", AgentPhase.Running, "Estimating missing items + cost"),
+                        shoppingAgent = AgentCardState("Shopping Agent", AgentPhase.Running, "Precomputing shopping for all recipes"),
                     )
 
-                    runAgent(
+                    runAgent<ShoppingPlanDeck>(
                         title = "Shopping Agent",
                         update = { _state.value = _state.value.copy(shoppingAgent = it) },
                         block = {
-                            BamlFunctions.BuildShoppingPlan(
+                            BamlFunctions.BuildShoppingPlans(
                                 inventory = inventory,
                                 constraints = constraints,
                                 recipePlan = recipePlan,
                                 options = options,
                             )
                         },
-                        summary = { "${it.items.size} missing items • $${"%.0f".format(it.estimatedTotalCostUsd)} est." },
-                    ) { result ->
-                        _state.value = _state.value.copy(shoppingPlan = result)
-                    }
+                        summary = { deck: ShoppingPlanDeck -> "${deck.plans.size} recipe shopping plans ready" },
+                        onSuccess = { result: ShoppingPlanDeck ->
+                            _state.value = _state.value.copy(shoppingPlanDeck = result)
+                        },
+                    )
                 }
             } finally {
                 _state.value = _state.value.copy(isRunning = false)

@@ -27,11 +27,11 @@ object BamlStreamFunctions {
     }
 
 
-    fun BuildShoppingPlanStream(inventory: baml_client.types.InventoryAnalysis, constraints: baml_client.types.CookingConstraints, recipePlan: baml_client.types.RecipePlan, options: CallOptions? = null): Flow<BamlResult> {
+    fun BuildShoppingPlansStream(inventory: baml_client.types.InventoryAnalysis, constraints: baml_client.types.CookingConstraints, recipePlan: baml_client.types.RecipePlan, options: CallOptions? = null): Flow<BamlResult> {
         val args = Serde.encodeArgs(mapOf(
             "inventory" to inventory,"constraints" to constraints,"recipePlan" to recipePlan
         ), options)
-        return BamlRuntime.client.streamFunction("BuildShoppingPlan", args)
+        return BamlRuntime.client.streamFunction("BuildShoppingPlans", args)
     }
 
 

@@ -53,6 +53,16 @@ class ShoppingPlan {
   estimatedTotalCostUsd float
 }
 
+class ShoppingPlanOption {
+  recipeName string
+  plan ShoppingPlan
+}
+
+class ShoppingPlanDeck {
+  title string
+  plans ShoppingPlanOption[]
+}
+
 function AnalyzeFridgeInventory(fridgeImage: image, pantryText: string?, userGoal: string?, selectedRestrictions: string[]) -> InventoryAnalysis {
   client PlannerClient
   prompt #"
@@ -125,17 +135,16 @@ function SuggestRecipePlan(inventory: InventoryAnalysis, constraints: CookingCon
   "#
 }
 
-function BuildShoppingPlan(inventory: InventoryAnalysis, constraints: CookingConstraints, recipePlan: RecipePlan) -> ShoppingPlan {
+function BuildShoppingPlans(inventory: InventoryAnalysis, constraints: CookingConstraints, recipePlan: RecipePlan) -> ShoppingPlanDeck {
   client PlannerClient
   prompt #"
     You are the Shopping Agent in a live meal-planning demo.
 
     Look at the structured inventory, constraints, and recipe plan.
-    Choose the single best recipe from the plan and produce a short, legible shopping list.
-    Include only the missing items that materially improve the meal.
-    Each item must include a practical quantity and a rough US dollar estimate.
-    estimatedTotalCostUsd should be the approximate total cost of the missing items.
-    pantryWins should mention ingredients that are already available and useful.
+    Produce a separate shopping plan for each recipe candidate.
+    Each plan should be short and legible, include only missing items that materially improve that specific meal,
+    and include rough US dollar estimates per item and per recipe total.
+    pantryWins should mention ingredients already available and useful for that recipe.
     notes should stay short.
 
     {{ ctx.output_format }}
@@ -154,9 +163,13 @@ function BuildShoppingPlan(inventory: InventoryAnalysis, constraints: CookingCon
 
     Recipe candidates:
     {% for recipe in recipePlan.recipes %}
-    - {{ recipe.name }} | {{ recipe.cookTimeMinutes }} min | {{ recipe.proteinEstimateGrams }}g protein
-      Uses: {{ recipe.usesIngredients }}
-      Missing: {{ recipe.missingIngredients }}
+    - Name: {{ recipe.name }}
+      Description: {{ recipe.description }}
+      Cook time: {{ recipe.cookTimeMinutes }}
+      Protein estimate: {{ recipe.proteinEstimateGrams }}
+      Difficulty: {{ recipe.difficulty }}
+      Uses ingredients: {{ recipe.usesIngredients }}
+      Missing ingredients: {{ recipe.missingIngredients }}
     {% endfor %}
   "#
 }

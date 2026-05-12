@@ -29,15 +29,15 @@ object BamlParseFunctions {
     }
 
 
-    /// Parse version of BuildShoppingPlan — takes raw LLM text and returns typed result.
-    suspend fun BuildShoppingPlan(text: String, options: CallOptions? = null): baml_client.types.ShoppingPlan {
+    /// Parse version of BuildShoppingPlans — takes raw LLM text and returns typed result.
+    suspend fun BuildShoppingPlans(text: String, options: CallOptions? = null): baml_client.types.ShoppingPlanDeck {
         val args = Serde.encodeArgs(mapOf(
             "text" to text,
             "stream" to false
         ), options)
-        val result = BamlRuntime.client.callFunctionParse("BuildShoppingPlan", args)
+        val result = BamlRuntime.client.callFunctionParse("BuildShoppingPlans", args)
         @Suppress("UNCHECKED_CAST")
-        return result as baml_client.types.ShoppingPlan
+        return result as baml_client.types.ShoppingPlanDeck
     }
 
 

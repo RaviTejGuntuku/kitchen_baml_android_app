@@ -28,13 +28,13 @@ object BamlFunctions {
     }
 
 
-    suspend fun BuildShoppingPlan(inventory: baml_client.types.InventoryAnalysis, constraints: baml_client.types.CookingConstraints, recipePlan: baml_client.types.RecipePlan, options: CallOptions? = null): baml_client.types.ShoppingPlan {
+    suspend fun BuildShoppingPlans(inventory: baml_client.types.InventoryAnalysis, constraints: baml_client.types.CookingConstraints, recipePlan: baml_client.types.RecipePlan, options: CallOptions? = null): baml_client.types.ShoppingPlanDeck {
         val args = Serde.encodeArgs(mapOf(
             "inventory" to inventory,"constraints" to constraints,"recipePlan" to recipePlan
         ), options)
-        val result = BamlRuntime.client.callFunction("BuildShoppingPlan", args)
+        val result = BamlRuntime.client.callFunction("BuildShoppingPlans", args)
         @Suppress("UNCHECKED_CAST")
-        return result as baml_client.types.ShoppingPlan
+        return result as baml_client.types.ShoppingPlanDeck
     }
 
 

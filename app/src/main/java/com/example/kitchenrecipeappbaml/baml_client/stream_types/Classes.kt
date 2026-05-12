@@ -195,3 +195,49 @@ data class ShoppingPlan(
         }
     }
 }
+data class ShoppingPlanDeck(
+    
+    val title: String?,
+    val plans: List<ShoppingPlanOption>
+    
+) : BamlSerializable {
+
+    override fun encode(): com.boundaryml.baml.cffi.HostValue {
+        return Serde.encodeClass("ShoppingPlanDeck", mapOf(
+            "title" to title,"plans" to plans
+        ))
+    }
+
+    override fun bamlTypeName(): String = "ShoppingPlanDeck"
+
+    companion object : BamlDeserializable<ShoppingPlanDeck> {
+        override fun decode(fields: Map<String, Any?>, typeMap: BamlTypeMap): ShoppingPlanDeck {
+            return ShoppingPlanDeck(
+                title = Serde.coerceNullable(fields["title"]) { value -> Serde.coerceString(value) },plans = Serde.coerceList(Serde.requireField(fields, "plans")) { item -> Serde.coerceNamedType<ShoppingPlanOption>(item, typeMap, "STREAM_TYPES", "ShoppingPlanOption") }
+            )
+        }
+    }
+}
+data class ShoppingPlanOption(
+    
+    val recipeName: String?,
+    val plan: ShoppingPlan?
+    
+) : BamlSerializable {
+
+    override fun encode(): com.boundaryml.baml.cffi.HostValue {
+        return Serde.encodeClass("ShoppingPlanOption", mapOf(
+            "recipeName" to recipeName,"plan" to plan
+        ))
+    }
+
+    override fun bamlTypeName(): String = "ShoppingPlanOption"
+
+    companion object : BamlDeserializable<ShoppingPlanOption> {
+        override fun decode(fields: Map<String, Any?>, typeMap: BamlTypeMap): ShoppingPlanOption {
+            return ShoppingPlanOption(
+                recipeName = Serde.coerceNullable(fields["recipeName"]) { value -> Serde.coerceString(value) },plan = Serde.coerceNullable(fields["plan"]) { value -> Serde.coerceNamedType<ShoppingPlan>(value, typeMap, "STREAM_TYPES", "ShoppingPlan") }
+            )
+        }
+    }
+}
