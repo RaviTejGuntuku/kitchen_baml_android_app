@@ -7,6 +7,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val bamlSdkNative by configurations.creating
+
 val localProperties = Properties().apply {
     val file = rootProject.file("local.properties")
     if (file.exists()) {
@@ -70,7 +72,9 @@ android {
             path = file("src/main/cpp/CMakeLists.txt")
         }
     }
-    sourceSets["main"].jniLibs.setSrcDirs(listOf("src/main/jniLibs"))
+    sourceSets["main"].jniLibs.setSrcDirs(
+        listOf(layout.buildDirectory.dir("generated/baml-jniLibs").get().asFile)
+    )
     packaging {
         jniLibs {
             useLegacyPackaging = true
@@ -86,6 +90,7 @@ dependencies {
     implementation("io.github.ravitejguntuku:baml-kotlin:0.1.0") {
         exclude(group = "net.java.dev.jna", module = "jna")
     }
+    bamlSdkNative("io.github.ravitejguntuku:baml-kotlin:0.1.0")
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.core.ktx)
@@ -112,4 +117,41 @@ tasks.withType<KotlinCompile>().configureEach {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_21)
     }
+}
+
+val syncBamlBridgeLibs by tasks.registering(Sync::class) {
+    group = "build"
+    description = "Extract Android bridge_cffi libraries from the baml-kotlin SDK jar"
+
+    val sdkJar = bamlSdkNative.incoming.artifactView { }.files.elements.map { files ->
+        files
+            .map { it.asFile }
+            .single { it.name.startsWith("baml-kotlin-") && it.extension == "jar" }
+    }
+
+    from(sdkJar.map { zipTree(it) }) {
+        include("native/android-arm64/libbridge_cffi.so")
+        eachFile {
+            path = "arm64-v8a/${name}"
+        }
+        includeEmptyDirs = false
+    }
+
+    from(sdkJar.map { zipTree(it) }) {
+        include("native/android-x86_64/libbridge_cffi.so")
+        eachFile {
+            path = "x86_64/${name}"
+        }
+        includeEmptyDirs = false
+    }
+
+    into(layout.buildDirectory.dir("generated/baml-jniLibs"))
+}
+
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }.configureEach {
+    dependsOn(syncBamlBridgeLibs)
+}
+
+tasks.matching { it.name.startsWith("configureCMake") || it.name.startsWith("buildCMake") }.configureEach {
+    dependsOn(syncBamlBridgeLibs)
 }

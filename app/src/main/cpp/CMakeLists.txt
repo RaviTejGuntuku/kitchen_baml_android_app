@@ -3,7 +3,7 @@ project(baml_jni C)
 
 add_library(bridge_cffi SHARED IMPORTED)
 set_target_properties(bridge_cffi PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/../jniLibs/${ANDROID_ABI}/libbridge_cffi.so
+    IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/../../../build/generated/baml-jniLibs/${ANDROID_ABI}/libbridge_cffi.so
     IMPORTED_NO_SONAME TRUE
 )
 
