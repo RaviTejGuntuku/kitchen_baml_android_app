@@ -20,7 +20,7 @@ The demo flow is:
 
 The app expects the runtime to come from the published Maven artifact:
 
-- `io.github.ravitejguntuku:baml-kotlin:0.1.0`
+- `io.github.ravitejguntuku:baml-kotlinx:0.1.0`
 
 ## How The Rust Runtime Gets Into The App
 
