@@ -44,10 +44,6 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "BAML_OPENROUTER_API_KEY", "\"$demoApiKey\"")
-
-        ndk {
-            abiFilters += listOf("arm64-v8a", "x86_64")
-        }
     }
 
     buildTypes {
@@ -66,11 +62,6 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
-    }
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-        }
     }
     sourceSets["main"].jniLibs.setSrcDirs(
         listOf(layout.buildDirectory.dir("generated/baml-jniLibs").get().asFile)
@@ -149,9 +140,5 @@ val syncBamlBridgeLibs by tasks.registering(Sync::class) {
 }
 
 tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }.configureEach {
-    dependsOn(syncBamlBridgeLibs)
-}
-
-tasks.matching { it.name.startsWith("configureCMake") || it.name.startsWith("buildCMake") }.configureEach {
     dependsOn(syncBamlBridgeLibs)
 }

@@ -1,6 +1,9 @@
 package com.example.kitchenrecipeappbaml.ui
 
 import android.app.Application
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import android.util.Base64
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
@@ -11,7 +14,6 @@ import baml_client.types.CookingConstraints
 import baml_client.types.InventoryAnalysis
 import baml_client.types.RecipePlan
 import baml_client.types.ShoppingPlanDeck
-import baml_client.types.ShoppingPlan
 import com.boundaryml.baml.BamlImage
 import com.boundaryml.baml.BamlException
 import com.boundaryml.baml.CallOptions
@@ -19,10 +21,15 @@ import com.example.kitchenrecipeappbaml.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+
+enum class ImageInputMode {
+    Preset,
+    Uploaded,
+}
 
 enum class AgentPhase {
     Idle,
@@ -42,6 +49,8 @@ data class RecipePlannerUiState(
     val goalText: String = sampleFridges.first().starterGoal,
     val pantryText: String = "",
     val selectedSampleId: String = sampleFridges.first().id,
+    val uploadedImageUri: Uri? = null,
+    val activeImageMode: ImageInputMode = ImageInputMode.Preset,
     val selectedRestrictions: Set<String> = sampleFridges.first().defaultRestrictions,
     val isRunning: Boolean = false,
     val errorMessage: String? = null,
@@ -57,6 +66,13 @@ data class RecipePlannerUiState(
 ) {
     val selectedSample: FridgeSample
         get() = sampleFridgesById.getValue(selectedSampleId)
+
+    val activeImageModel: Any
+        get() = if (activeImageMode == ImageInputMode.Uploaded && uploadedImageUri != null) {
+            uploadedImageUri
+        } else {
+            selectedSample.imageResId
+        }
 }
 
 class RecipePlannerViewModel(
@@ -68,6 +84,7 @@ class RecipePlannerViewModel(
 
     private var analysisJob: Job? = null
     private val sampleImageCache = mutableMapOf<String, BamlImage>()
+    private val uploadedImageCache = mutableMapOf<String, BamlImage>()
 
     private val _state = kotlinx.coroutines.flow.MutableStateFlow(RecipePlannerUiState())
     val state: kotlinx.coroutines.flow.StateFlow<RecipePlannerUiState> = _state
@@ -84,9 +101,45 @@ class RecipePlannerViewModel(
         val sample = sampleFridgesById.getValue(sampleId)
         _state.value = _state.value.copy(
             selectedSampleId = sampleId,
+            activeImageMode = ImageInputMode.Preset,
             goalText = sample.starterGoal,
             pantryText = "",
             selectedRestrictions = sample.defaultRestrictions,
+            errorMessage = null,
+        )
+    }
+
+    fun setUploadedImage(uri: Uri?) {
+        _state.value = _state.value.copy(
+            uploadedImageUri = uri,
+            activeImageMode = if (uri != null) ImageInputMode.Uploaded else ImageInputMode.Preset,
+            errorMessage = null,
+        )
+    }
+
+    fun usePresetImage() {
+        _state.value = _state.value.copy(
+            activeImageMode = ImageInputMode.Preset,
+            errorMessage = null,
+        )
+    }
+
+    fun useUploadedImage() {
+        if (_state.value.uploadedImageUri == null) return
+        _state.value = _state.value.copy(
+            activeImageMode = ImageInputMode.Uploaded,
+            errorMessage = null,
+        )
+    }
+
+    fun clearUploadedImage() {
+        val currentUri = _state.value.uploadedImageUri?.toString()
+        if (currentUri != null) {
+            uploadedImageCache.remove(currentUri)
+        }
+        _state.value = _state.value.copy(
+            uploadedImageUri = null,
+            activeImageMode = ImageInputMode.Preset,
             errorMessage = null,
         )
     }
@@ -167,7 +220,7 @@ class RecipePlannerViewModel(
                     tags = mapOf("demo" to "kitchen_recipe_app"),
                 )
                 val fridgeImage = withContext(Dispatchers.IO) {
-                    prepareSampleImage(currentState.selectedSample)
+                    prepareActiveImage(currentState)
                 }
 
                 supervisorScope {
@@ -303,6 +356,66 @@ class RecipePlannerViewModel(
         return BamlImage.fromBase64(base64, "image/jpeg").also {
             sampleImageCache[sample.id] = it
         }
+    }
+
+    private fun prepareActiveImage(state: RecipePlannerUiState): BamlImage {
+        val uploadedUri = state.uploadedImageUri
+        return if (state.activeImageMode == ImageInputMode.Uploaded && uploadedUri != null) {
+            prepareUploadedImage(uploadedUri)
+        } else {
+            prepareSampleImage(state.selectedSample)
+        }
+    }
+
+    private fun prepareUploadedImage(uri: Uri): BamlImage {
+        val cacheKey = uri.toString()
+        uploadedImageCache[cacheKey]?.let { return it }
+
+        val resolver = getApplication<Application>().contentResolver
+        val mimeType = resolver.getType(uri)
+        val imageBytes = normalizeUploadedImage(uri)
+        val base64 = Base64.encodeToString(imageBytes, Base64.NO_WRAP)
+        return BamlImage.fromBase64(base64, mimeType ?: "image/jpeg").also {
+            uploadedImageCache[cacheKey] = it
+        }
+    }
+
+    private fun normalizeUploadedImage(uri: Uri): ByteArray {
+        val resolver = getApplication<Application>().contentResolver
+        val bounds = BitmapFactory.Options().apply {
+            inJustDecodeBounds = true
+        }
+        resolver.openInputStream(uri).use { stream ->
+            requireNotNull(stream) { "Unable to open selected image" }
+            BitmapFactory.decodeStream(stream, null, bounds)
+        }
+
+        val sampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight, 1600)
+        val decodeOptions = BitmapFactory.Options().apply {
+            inSampleSize = sampleSize
+        }
+        val bitmap = resolver.openInputStream(uri).use { stream ->
+            requireNotNull(stream) { "Unable to reopen selected image" }
+            BitmapFactory.decodeStream(stream, null, decodeOptions)
+        } ?: throw IllegalArgumentException("Failed to decode selected image")
+
+        return ByteArrayOutputStream().use { output ->
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 85, output)
+            bitmap.recycle()
+            output.toByteArray()
+        }
+    }
+
+    private fun calculateInSampleSize(width: Int, height: Int, maxDimension: Int): Int {
+        var sampleSize = 1
+        var currentWidth = width
+        var currentHeight = height
+        while (currentWidth > maxDimension || currentHeight > maxDimension) {
+            currentWidth /= 2
+            currentHeight /= 2
+            sampleSize *= 2
+        }
+        return sampleSize.coerceAtLeast(1)
     }
 }
 

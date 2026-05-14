@@ -1,5 +1,8 @@
 package com.example.kitchenrecipeappbaml.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -45,7 +48,6 @@ import baml_client.types.InventoryAnalysis
 import baml_client.types.RecipePlan
 import baml_client.types.RecipeSuggestion
 import baml_client.types.ShoppingPlanDeck
-import baml_client.types.ShoppingPlan
 import com.example.kitchenrecipeappbaml.ui.theme.Butter
 import com.example.kitchenrecipeappbaml.ui.theme.Charcoal
 import com.example.kitchenrecipeappbaml.ui.theme.CounterWhite
@@ -62,6 +64,11 @@ fun RecipePlannerScreen(
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        viewModel.setUploadedImage(uri)
+    }
 
     LazyColumn(
         modifier = modifier
@@ -74,8 +81,16 @@ fun RecipePlannerScreen(
         }
         item {
             SampleSelector(
-                selectedSampleId = state.selectedSampleId,
+                state = state,
                 onSelect = viewModel::selectSample,
+                onUploadClick = {
+                    photoPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                    )
+                },
+                onUsePreset = viewModel::usePresetImage,
+                onUseUploaded = viewModel::useUploadedImage,
+                onClearUploaded = viewModel::clearUploadedImage,
             )
         }
         item {
@@ -159,12 +174,16 @@ private fun HeroSection() {
 
 @Composable
 private fun SampleSelector(
-    selectedSampleId: String,
+    state: RecipePlannerUiState,
     onSelect: (String) -> Unit,
+    onUploadClick: () -> Unit,
+    onUsePreset: () -> Unit,
+    onUseUploaded: () -> Unit,
+    onClearUploaded: () -> Unit,
 ) {
     SectionCard(title = "1. Pick a fridge") {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            val selectedSample = sampleFridgesById.getValue(selectedSampleId)
+            val selectedSample = state.selectedSample
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = CounterWhite),
@@ -172,7 +191,7 @@ private fun SampleSelector(
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     AsyncImage(
-                        model = selectedSample.imageResId,
+                        model = state.activeImageModel,
                         contentDescription = selectedSample.title,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -183,8 +202,47 @@ private fun SampleSelector(
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        Text(selectedSample.title, style = MaterialTheme.typography.titleMedium)
-                        Text(selectedSample.subtitle, style = MaterialTheme.typography.bodyMedium, color = Stone)
+                        val isUploaded = state.activeImageMode == ImageInputMode.Uploaded && state.uploadedImageUri != null
+                        Text(
+                            if (isUploaded) "Uploaded Fridge Image" else selectedSample.title,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            if (isUploaded) "Using a photo selected from the device. Tap a preset to switch back instantly."
+                            else selectedSample.subtitle,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Stone,
+                        )
+                    }
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                ActionButton(
+                    onClick = onUploadClick,
+                    enabled = true,
+                    primary = true,
+                ) {
+                    Text("Upload Image")
+                }
+                if (state.uploadedImageUri != null && state.activeImageMode == ImageInputMode.Preset) {
+                    ActionButton(
+                        onClick = onUseUploaded,
+                        enabled = true,
+                        primary = false,
+                    ) {
+                        Text("Use Uploaded")
+                    }
+                }
+                if (state.uploadedImageUri != null) {
+                    ActionButton(
+                        onClick = onClearUploaded,
+                        enabled = true,
+                        primary = false,
+                    ) {
+                        Text("Clear Upload")
                     }
                 }
             }
@@ -195,8 +253,8 @@ private fun SampleSelector(
                             .width(158.dp)
                             .clip(RoundedCornerShape(20.dp))
                             .border(
-                                width = if (sample.id == selectedSampleId) 2.dp else 0.dp,
-                                color = if (sample.id == selectedSampleId) OliveGreen else Color.Transparent,
+                                width = if (sample.id == state.selectedSampleId && state.activeImageMode == ImageInputMode.Preset) 2.dp else 0.dp,
+                                color = if (sample.id == state.selectedSampleId && state.activeImageMode == ImageInputMode.Preset) OliveGreen else Color.Transparent,
                                 shape = RoundedCornerShape(20.dp),
                             ),
                         colors = CardDefaults.cardColors(containerColor = CounterWhite),
@@ -226,6 +284,11 @@ private fun SampleSelector(
                             }
                         }
                     }
+                }
+            }
+            if (state.uploadedImageUri != null) {
+                OutlinedButton(onClick = onUsePreset, modifier = Modifier.align(Alignment.Start)) {
+                    Text("Use Preset Gallery")
                 }
             }
         }

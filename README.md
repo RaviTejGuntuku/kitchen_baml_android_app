@@ -1,150 +1,171 @@
 # KitchenRecipeAppBAML
 
-This repo is set up to demonstrate the Kotlin SDK developer flow for BAML on Android.
+This repo is the Android demo app for the Kotlin BAML SDK.
 
-The repo is intentionally in a mostly pre-codegen state:
+The demo flow is:
 
-- the handwritten Android frontend is checked in
-- the BAML source files are checked in
-- the generated `baml_client` code is not checked in
-- the app-local JNI shim is checked in
-- the Rust `libbridge_cffi.so` binaries are not checked in
+1. clone this app
+2. get the Kotlin-capable CLI from [`RaviTejGuntuku/tej_baml_kotlin`](https://github.com/RaviTejGuntuku/tej_baml_kotlin)
+3. generate `baml_client`
+4. build and install the app
+5. run the app with preset images or an uploaded fridge photo
 
-That means the closest working flow today is:
+## What This Repo Contains
 
-1. `baml-cli generate`
-2. build app
-3. run app
+- handwritten Android UI and ViewModel code
+- checked-in `baml_src`
+- no checked-in generated `baml_client`
+- no app-local JNI C/CMake glue
 
-There is still one Android-specific caveat: the app builds a tiny JNI shim (`libbaml_jni.so`) locally, because the SDK does not yet ship a fully Android-ready AAR containing both native pieces.
+The app expects the runtime to come from the published Maven artifact:
 
-## Project Structure
+- `io.github.ravitejguntuku:baml-kotlin:0.1.0`
 
-- BAML source:
-  `/Users/tejguntuku/AndroidStudioProjects/KitchenRecipeAppBAML/baml_src`
-- Android app:
-  `/Users/tejguntuku/AndroidStudioProjects/KitchenRecipeAppBAML/app`
-- Generated Kotlin client target:
-  `/Users/tejguntuku/AndroidStudioProjects/KitchenRecipeAppBAML/app/src/main/java/com/example/kitchenrecipeappbaml/baml_client`
+## SDK Repo
 
-The generator configuration lives in:
+The Kotlin-capable CLI and SDK source live here:
 
-- `/Users/tejguntuku/AndroidStudioProjects/KitchenRecipeAppBAML/baml_src/generators.baml`
+- [RaviTejGuntuku/tej_baml_kotlin](https://github.com/RaviTejGuntuku/tej_baml_kotlin)
 
-## Prerequisites
+The Kotlin SDK install guide now lives in that repo’s Kotlin SDK README.
+
+## Demo Prerequisites
 
 You need:
 
-1. A Kotlin-capable `baml-cli`
-2. The `baml-kotlin` SDK published to `mavenLocal()`
-3. An `OPENROUTER_API_KEY` in `local.properties` or your shell environment
-4. Android SDK / NDK installed so Gradle can compile the JNI shim
+1. Android Studio and an Android emulator
+2. Java 21
+3. Rust and Cargo
+4. an OpenRouter API key
 
-Example `local.properties` entry:
+Put this in `local.properties` at the root of this app repo:
 
 ```properties
 OPENROUTER_API_KEY=your_key_here
 ```
 
-## One-Time Local SDK Setup
+## Fresh Demo Setup
 
-Install the local Kotlin-capable CLI:
-
-```bash
-cd /Users/tejguntuku/TEJ/tej_baml_kotlin
-cargo install --path engine/cli --bin baml-cli --force
-```
-
-Publish the Kotlin SDK to local Maven:
+### 1. Clone the app
 
 ```bash
-cd /Users/tejguntuku/TEJ/tej_baml_kotlin/engine/language_client_kotlin
-./gradlew publishToMavenLocal
+git clone https://github.com/RaviTejGuntuku/kitchen_baml_android_app.git
+cd kitchen_baml_android_app
 ```
 
-Notes:
+### 2. Clone the Kotlin SDK fork
 
-- Do not use the older CLI under `/Users/tejguntuku/TEJ/tej_baml_kotlin/baml_language`; its `generate` subcommand is currently disabled.
-- The Android app depends on `io.github.ravitejguntuku:baml-kotlin:0.1.0`, so `publishToMavenLocal` must happen before the app build.
-
-## Generate The Kotlin Client
-
-From the app repo:
+Clone the public fork next to the app repo:
 
 ```bash
-cd /Users/tejguntuku/AndroidStudioProjects/KitchenRecipeAppBAML
-baml-cli generate --from ./baml_src
+cd ..
+git clone https://github.com/RaviTejGuntuku/tej_baml_kotlin.git
+cd kitchen_baml_android_app
 ```
 
-If you want to run directly from the local fork instead of the installed binary:
+### 3. Generate Kotlin code from BAML
+
+For one-off generation:
 
 ```bash
-cd /Users/tejguntuku/TEJ/tej_baml_kotlin
-cargo run --manifest-path engine/cli/Cargo.toml -- generate --from /Users/tejguntuku/AndroidStudioProjects/KitchenRecipeAppBAML/baml_src
+cd ../tej_baml_kotlin
+cargo run --manifest-path ./engine/cli/Cargo.toml -- generate --from /absolute/path/to/kitchen_baml_android_app/baml_src
+cd ../kitchen_baml_android_app
 ```
 
-After generation, you should see:
-
-```text
-/Users/tejguntuku/AndroidStudioProjects/KitchenRecipeAppBAML/app/src/main/java/com/example/kitchenrecipeappbaml/baml_client
-```
-
-## Build And Run The App
-
-Once codegen is complete:
+For repeat runs, build the CLI once and reuse the binary:
 
 ```bash
-cd /Users/tejguntuku/AndroidStudioProjects/KitchenRecipeAppBAML
-./gradlew :app:assembleDebug
-./gradlew :app:installDebug
+cd ../tej_baml_kotlin
+cargo build --manifest-path ./engine/cli/Cargo.toml
+./engine/target/debug/baml-cli generate --from /absolute/path/to/kitchen_baml_android_app/baml_src
+cd ../kitchen_baml_android_app
 ```
 
-Then launch the app from Android Studio or the emulator.
+### 4. Build and install the app
 
-## What Gradle Does For You
+```bash
+./gradlew clean :app:installDebug
+```
 
-The app is now closer to `generate -> build -> run` than before:
+### 5. Launch the app
 
-- Gradle extracts `libbridge_cffi.so` from the `baml-kotlin` SDK jar automatically
-- the extracted files are placed under:
-  `/Users/tejguntuku/AndroidStudioProjects/KitchenRecipeAppBAML/app/build/generated/baml-jniLibs`
-- CMake compiles the tiny app-local JNI shim (`baml_jni.c`) into `libbaml_jni.so`
-- the APK packages both:
-  - `libbridge_cffi.so`
-  - `libbaml_jni.so`
+Open `Recipe Planner` on the emulator.
 
-So you no longer need to manually copy Rust `.so` files into `app/src/main/jniLibs`.
+## Regenerate From Scratch
 
-## Expected Developer Workflow
+If you want to delete and regenerate the client:
 
-The intended workflow for this repo is:
+```bash
+rm -rf ./app/src/main/java/com/example/kitchenrecipeappbaml/baml_client
+cd ../tej_baml_kotlin
+./engine/target/debug/baml-cli generate --from /absolute/path/to/kitchen_baml_android_app/baml_src
+cd ../kitchen_baml_android_app
+./gradlew clean :app:installDebug
+```
 
-1. Edit BAML files in `/Users/tejguntuku/AndroidStudioProjects/KitchenRecipeAppBAML/baml_src`
-2. Run `baml-cli generate --from ./baml_src`
-3. Run `./gradlew :app:installDebug`
-4. Launch the app
+If you have not built the CLI binary yet, replace the generate step with:
 
-The handwritten frontend already references the generated API surface, so after generation it should be able to call:
+```bash
+cargo run --manifest-path ./engine/cli/Cargo.toml -- generate --from /absolute/path/to/kitchen_baml_android_app/baml_src
+```
 
-- `BamlRuntime.init(...)`
-- `BamlFunctions.AnalyzeFridgeInventory(...)`
-- `BamlFunctions.InferCookingConstraints(...)`
-- `BamlFunctions.SuggestRecipePlan(...)`
-- `BamlFunctions.BuildShoppingPlans(...)`
+## Demo Script
 
-## Current Limitation
+This is the cleanest live demo:
 
-The last remaining non-ideal part of the Android experience is that this repo still carries:
+1. Show `baml_src`.
+2. Delete `app/src/main/java/com/example/kitchenrecipeappbaml/baml_client`.
+3. Run Kotlin codegen from the public fork.
+4. Run `./gradlew clean :app:installDebug`.
+5. Open the app on the emulator.
+6. Run with a preset fridge image.
+7. Run again with an uploaded fridge image.
 
-- `/Users/tejguntuku/AndroidStudioProjects/KitchenRecipeAppBAML/app/src/main/cpp/CMakeLists.txt`
-- `/Users/tejguntuku/AndroidStudioProjects/KitchenRecipeAppBAML/app/src/main/cpp/baml_jni.c`
+## Uploading Images To The Emulator
 
-That is because the current `baml-kotlin` publication is a JVM jar with bundled `libbridge_cffi.so` resources, not a full Android AAR that already exposes JNI entrypoints.
+The app supports both:
 
-So the current reality is:
+- preset fridge gallery images
+- uploaded images from the emulator’s storage
 
-- `baml-cli generate`
-- build app
-- run app
+### Fastest option
 
-with no manual `.so` copying, but not yet with zero Android-native build glue.
+Drag a `.jpg` or `.png` directly into the emulator window.
+
+### `adb` option
+
+```bash
+adb push /absolute/path/to/fridge.jpg /sdcard/Download/
+```
+
+Then in the app:
+
+1. tap `Upload Image`
+2. pick the image from `Downloads` or the system photo picker
+
+## Notes On The Current State
+
+This demo is intentionally based on the public fork for codegen.
+
+That means:
+
+- runtime linking should come from Maven Central
+- Kotlin codegen currently comes from your public fork source
+
+So the demo is reproducible on another laptop, but the CLI install story is still:
+
+- clone public fork
+- run or build the CLI locally
+
+rather than:
+
+```bash
+brew install baml-cli
+```
+
+## Architecture
+
+If you want the runtime/FFI/Gradle architecture details, see:
+
+- [`/Users/tejguntuku/AndroidStudioProjects/KitchenRecipeAppBAML/ARCHITECTURE.md`](/Users/tejguntuku/AndroidStudioProjects/KitchenRecipeAppBAML/ARCHITECTURE.md)
