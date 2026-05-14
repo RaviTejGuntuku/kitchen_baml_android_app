@@ -5,10 +5,11 @@ This repo is the Android demo app for the Kotlin BAML SDK.
 The demo flow is:
 
 1. clone this app
-2. get the Kotlin-capable CLI from [`RaviTejGuntuku/tej_baml_kotlin`](https://github.com/RaviTejGuntuku/tej_baml_kotlin)
-3. generate `baml_client`
-4. build and install the app
-5. run the app with preset images or an uploaded fridge photo
+2. clone `RaviTejGuntuku/tej_baml_kotlin`
+3. build that fork’s CLI and put it on `PATH`
+4. generate `baml_client`
+5. build and install the app
+6. run the app with preset images or an uploaded fridge photo
 
 ## What This Repo Contains
 
@@ -20,6 +21,27 @@ The demo flow is:
 The app expects the runtime to come from the published Maven artifact:
 
 - `io.github.ravitejguntuku:baml-kotlin:0.1.0`
+
+## How The Rust Runtime Gets Into The App
+
+The Android app does not manually vendor the Rust runtime.
+
+Instead:
+
+1. the app depends on the published Maven artifact:
+   - `io.github.ravitejguntuku:baml-kotlin:0.1.0`
+2. that artifact contains the Android native runtime libraries:
+   - `native/android-arm64/libbridge_cffi.so`
+   - `native/android-x86_64/libbridge_cffi.so`
+3. during the Gradle build, the app extracts those `.so` files from the SDK artifact
+4. Gradle packages the correct ABI-specific `.so` into the APK
+5. at runtime, the Kotlin SDK loads the native library with:
+
+```kotlin
+System.loadLibrary("bridge_cffi")
+```
+
+So from the app consumer’s point of view, the Rust runtime comes from Maven Central.
 
 ## SDK Repo
 
@@ -55,7 +77,7 @@ cd kitchen_baml_android_app
 
 ### 2. Clone the Kotlin SDK fork
 
-Clone the public fork next to the app repo:
+Clone the fork next to the app repo:
 
 ```bash
 cd ..
@@ -63,32 +85,34 @@ git clone https://github.com/RaviTejGuntuku/tej_baml_kotlin.git
 cd kitchen_baml_android_app
 ```
 
-### 3. Generate Kotlin code from BAML
-
-For one-off generation:
-
-```bash
-cd ../tej_baml_kotlin
-cargo run --manifest-path ./engine/cli/Cargo.toml -- generate --from /absolute/path/to/kitchen_baml_android_app/baml_src
-cd ../kitchen_baml_android_app
-```
-
-For repeat runs, build the CLI once and reuse the binary:
+### 3. Build the fork’s CLI and set `baml-cli` to that binary
 
 ```bash
 cd ../tej_baml_kotlin
 cargo build --manifest-path ./engine/cli/Cargo.toml
-./engine/target/debug/baml-cli generate --from /absolute/path/to/kitchen_baml_android_app/baml_src
+export PATH="$(pwd)/engine/target/debug:$PATH"
+which baml-cli
+baml-cli --version
 cd ../kitchen_baml_android_app
 ```
 
-### 4. Build and install the app
+This ensures `baml-cli` resolves to the CLI built from your fork.
+
+### 4. Generate Kotlin code from BAML
+
+Generate code:
+
+```bash
+baml-cli generate --from ./baml_src
+```
+
+### 5. Build and install the app
 
 ```bash
 ./gradlew clean :app:installDebug
 ```
 
-### 5. Launch the app
+### 6. Launch the app
 
 Open `Recipe Planner` on the emulator.
 
@@ -98,16 +122,18 @@ If you want to delete and regenerate the client:
 
 ```bash
 rm -rf ./app/src/main/java/com/example/kitchenrecipeappbaml/baml_client
-cd ../tej_baml_kotlin
-./engine/target/debug/baml-cli generate --from /absolute/path/to/kitchen_baml_android_app/baml_src
-cd ../kitchen_baml_android_app
+baml-cli generate --from ./baml_src
 ./gradlew clean :app:installDebug
 ```
 
-If you have not built the CLI binary yet, replace the generate step with:
+If you have not built the CLI binary yet, build the fork and set `PATH` first:
 
 ```bash
-cargo run --manifest-path ./engine/cli/Cargo.toml -- generate --from /absolute/path/to/kitchen_baml_android_app/baml_src
+cd ../tej_baml_kotlin
+cargo build --manifest-path ./engine/cli/Cargo.toml
+export PATH="$(pwd)/engine/target/debug:$PATH"
+cd ../kitchen_baml_android_app
+baml-cli generate --from ./baml_src
 ```
 
 ## Demo Script
@@ -116,11 +142,12 @@ This is the cleanest live demo:
 
 1. Show `baml_src`.
 2. Delete `app/src/main/java/com/example/kitchenrecipeappbaml/baml_client`.
-3. Run Kotlin codegen from the public fork.
-4. Run `./gradlew clean :app:installDebug`.
-5. Open the app on the emulator.
-6. Run with a preset fridge image.
-7. Run again with an uploaded fridge image.
+3. Set `PATH` so `baml-cli` points at the fork binary.
+4. Run Kotlin codegen.
+5. Run `./gradlew clean :app:installDebug`.
+6. Open the app on the emulator.
+7. Run with a preset fridge image.
+8. Run again with an uploaded fridge image.
 
 ## Uploading Images To The Emulator
 
@@ -146,17 +173,19 @@ Then in the app:
 
 ## Notes On The Current State
 
-This demo is intentionally based on the public fork for codegen.
+This demo is intentionally based on your fork for codegen.
 
 That means:
 
 - runtime linking should come from Maven Central
-- Kotlin codegen currently comes from your public fork source
+- Kotlin codegen should come from the `baml-cli` binary built from `RaviTejGuntuku/tej_baml_kotlin`
 
-So the demo is reproducible on another laptop, but the CLI install story is still:
+So the intended setup is:
 
-- clone public fork
-- run or build the CLI locally
+- clone the fork
+- build the CLI once
+- export that binary onto `PATH`
+- run `baml-cli generate`
 
 rather than:
 

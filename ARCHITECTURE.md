@@ -93,11 +93,9 @@ This generates Kotlin into:
 Typical generated files include:
 
 - `BamlFunctions.kt`
-- `BamlStreamFunctions.kt`
 - `BamlRuntimeInit.kt`
 - `BamlTypeMap.kt`
 - generated `types/*`
-- generated `stream_types/*`
 
 ### What codegen does
 
@@ -117,7 +115,6 @@ It does not compile away:
 - provider logic
 - prompt rendering
 - runtime validation/parsing
-- streaming orchestration
 - retries/fallback behavior
 
 Those still live in the Rust runtime.
@@ -207,28 +204,27 @@ So the app decides *which* calls run concurrently, while Rust decides *how* each
 
 ## FFI Boundary
 
-The Android JNI shim lives here:
+The Android JNI implementation now lives inside `bridge_cffi` in the SDK fork:
 
-- [`/Users/tejguntuku/AndroidStudioProjects/KitchenRecipeAppBAML/app/src/main/cpp/baml_jni.c`](/Users/tejguntuku/AndroidStudioProjects/KitchenRecipeAppBAML/app/src/main/cpp/baml_jni.c)
+- [`/Users/tejguntuku/TEJ/tej_baml_kotlin/baml_language/crates/bridge_cffi/src/ffi/jni.rs`](/Users/tejguntuku/TEJ/tej_baml_kotlin/baml_language/crates/bridge_cffi/src/ffi/jni.rs)
 
-This file does not know about your specific BAML functions like `AnalyzeFridgeInventory`.
+It does not know about your specific BAML functions like `AnalyzeFridgeInventory`.
 It only knows how to:
 
 - receive Java/Kotlin JNI calls
-- convert them into a plain C ABI call
-- pass function names and encoded bytes into Rust
+- convert them into Rust runtime calls
+- pass function names and encoded bytes into the engine
 - route callbacks back into Kotlin
 
 ### Core Rust-exported C ABI functions
 
-These are the main functions `baml_jni.c` forwards to in `libbridge_cffi.so`:
+These are the main functions exposed by `libbridge_cffi.so`:
 
 - `version`
 - `create_baml_runtime`
 - `destroy_baml_runtime`
 - `register_callbacks`
 - `call_function_from_c`
-- `call_function_stream_from_c`
 - `call_function_parse_from_c`
 - `cancel_function_call`
 - `clone_handle`
@@ -247,6 +243,7 @@ Generated Kotlin passes:
 - callback ID
 
 Then `baml_jni.c` forwards that to:
+Then the JNI layer in `bridge_cffi` forwards that to:
 
 ```c
 call_function_from_c(runtime, function_name, encoded_args, length, id)
