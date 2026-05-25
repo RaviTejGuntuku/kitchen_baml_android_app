@@ -20,7 +20,7 @@ The demo flow is:
 
 The app expects the runtime to come from the published Maven artifact:
 
-- `io.github.ravitejguntuku:baml-kotlinx:0.1.0`
+- `io.github.ravitejguntuku:baml-kotlin:0.1.0`
 
 ## How The Rust Runtime Gets Into The App
 
@@ -45,11 +45,28 @@ So from the app consumer’s point of view, the Rust runtime comes from Maven Ce
 
 ## SDK Repo
 
-The Kotlin-capable CLI and SDK source live here:
+The Kotlin implementation used by this demo lives in this fork:
 
 - [RaviTejGuntuku/tej_baml_kotlin](https://github.com/RaviTejGuntuku/tej_baml_kotlin)
 
-The Kotlin SDK install guide now lives in that repo’s Kotlin SDK README.
+The important locations inside that fork are:
+
+- codegen CLI:
+  - `engine/cli`
+- Kotlin SDK:
+  - `engine/language_client_kotlin`
+- native Rust runtime that Android loads:
+  - `baml_language/crates/bridge_cffi`
+
+So for this app:
+
+- `engine/cli` is the part that generates `baml_client`
+- `engine/language_client_kotlin` is the SDK the app depends on from Maven
+- `baml_language/crates/bridge_cffi` is the Rust runtime that becomes `libbridge_cffi.so`
+
+The Kotlin SDK install guide lives in:
+
+- `engine/language_client_kotlin/README.md`
 
 ## Demo Prerequisites
 
@@ -96,7 +113,7 @@ baml-cli --version
 cd ../kitchen_baml_android_app
 ```
 
-This ensures `baml-cli` resolves to the CLI built from your fork.
+This ensures `baml-cli` resolves to the CLI built from your fork’s Kotlin codegen implementation in `engine/cli`.
 
 ### 4. Generate Kotlin code from BAML
 
@@ -179,6 +196,7 @@ That means:
 
 - runtime linking should come from Maven Central
 - Kotlin codegen should come from the `baml-cli` binary built from `RaviTejGuntuku/tej_baml_kotlin`
+- the native runtime the app loads comes from the same fork’s `baml_language/crates/bridge_cffi`, packaged into the published SDK artifact
 
 So the intended setup is:
 
